@@ -6,3 +6,37 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local project / environment setup
+.vite/
+.cache/
+*.local
+*.local.*
+
+# Android / Capacitor generated setup
+android/.gradle/
+android/.gradle_home/
+android/.idea/
+android/.kotlin/
+android/.cxx/
+android/local.properties
+android/**/build/
+android/**/captures/
+android/**/generated/
+android/**/intermediates/
+android/**/outputs/
+android/**/tmp/
+android/**/debug/
+android/**/release/
+android/**/src/main/assets/
+android/**/src/main/res/xml/config.xml
+android/**/.classpath
+android/**/.project
+android/**/.settings/
+android/**/*.iml
+
+# Misc generated files
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*

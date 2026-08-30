@@ -240,6 +240,29 @@ export default function ProfileView({
         </div>
       </div>
 
+      {/* APP INFO CARD */}
+      <div className="bg-slate-900/60 rounded-3xl border border-slate-800/80 p-4 flex items-center gap-3.5">
+        <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-md shadow-cyan-500/20 border border-cyan-500/30 shrink-0">
+          <img
+            src="/src/assets/images/gitmaster_app_icon_1788120621193.jpg"
+            alt="GitMaster App Icon"
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-bold text-slate-100">GitMaster</h4>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+              v1.2 Mobile
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Интерактивный тренажёр и симулятор командной строки Git
+          </p>
+        </div>
+      </div>
+
       {/* DANGER ZONE: RESET PROGRESS */}
       <div className="bg-rose-950/20 rounded-3xl border border-rose-900/30 p-4 space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">

@@ -58,10 +58,13 @@ export default function Navigation({
           onClick={() => handleNavClick('roadmap')}
           className="flex items-center gap-2 cursor-pointer"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 p-0.5 shadow-md shadow-cyan-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-cyan-400">
-              <GitBranch className="w-4 h-4" />
-            </div>
+          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-md shadow-cyan-500/20 border border-cyan-500/30 shrink-0">
+            <img
+              src="/src/assets/images/gitmaster_app_icon_1788120621193.jpg"
+              alt="GitMaster"
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <h1 className="text-xs font-black tracking-tight text-slate-100 uppercase">

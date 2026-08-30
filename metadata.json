@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "GitMaster",
+  "description": "Интерактивный тренажёр Git для практики команд, визуализации веток и прохождения уроков",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

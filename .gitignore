@@ -14,6 +14,7 @@ coverage/
 *.local.*
 
 # Android / Capacitor generated setup
+android/
 android/.gradle/
 android/.gradle_home/
 android/.idea/

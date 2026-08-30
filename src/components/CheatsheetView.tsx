@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CHEATSHEET_COMMANDS } from '../data/cheatsheetData';
+import { soundFX } from '../utils/soundEffects';
 import { Search, BookMarked, Copy, Check, Terminal, Sparkles, Filter } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -37,6 +38,7 @@ export default function CheatsheetView({ onTestInTerminal }: CheatsheetViewProps
 
   const handleCopy = (text: string, id: string) => {
     try {
+      soundFX.playTap();
       navigator.clipboard.writeText(text);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -75,7 +77,10 @@ export default function CheatsheetView({ onTestInTerminal }: CheatsheetViewProps
         {categories.map(cat => (
           <button
             key={cat}
-            onClick={() => setSelectedCategory(cat)}
+            onClick={() => {
+              soundFX.playTap();
+              setSelectedCategory(cat);
+            }}
             className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               selectedCategory === cat
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
@@ -173,7 +178,10 @@ export default function CheatsheetView({ onTestInTerminal }: CheatsheetViewProps
 
                         {onTestInTerminal && (
                           <button
-                            onClick={() => onTestInTerminal(ex.cmd)}
+                            onClick={() => {
+                              soundFX.playTap();
+                              onTestInTerminal(ex.cmd);
+                            }}
                             className="shrink-0 p-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-medium flex items-center gap-1"
                             title="Вставить в терминал"
                           >

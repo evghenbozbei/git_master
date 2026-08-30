@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { QuizQuestion, CommandPuzzle, RescueScenario, Flashcard } from '../types';
 import { QUIZ_QUESTIONS, COMMAND_PUZZLES, RESCUE_SCENARIOS, FLASHCARDS } from '../data/quizData';
 import confetti from 'canvas-confetti';
+import { soundFX } from '../utils/soundEffects';
 import {
   Zap,
   Puzzle,
@@ -70,6 +71,7 @@ export default function PracticeView({
 
   const handleQuizAnswer = (idx: number) => {
     if (quizSubmitted) return;
+    soundFX.playTap();
     setSelectedOption(idx);
   };
 
@@ -79,23 +81,30 @@ export default function PracticeView({
     const isCorrect = selectedOption === currentQuiz.correctIndex;
 
     if (isCorrect) {
+      soundFX.playCorrect();
       setQuizScore(prev => prev + 1);
       onAddXp(20);
+      setTimeout(() => {
+        soundFX.playXpGain();
+      }, 250);
       if (activePracticeTab === 'mistakes') {
         onResolveMistake(currentQuiz.id);
       }
     } else {
+      soundFX.playMistake();
       onMistake(currentQuiz.id);
     }
   };
 
   const handleNextQuiz = () => {
+    soundFX.playTap();
     if (currentQuizIdx + 1 < quizList.length) {
       setCurrentQuizIdx(prev => prev + 1);
       setSelectedOption(null);
       setQuizSubmitted(false);
     } else {
       setQuizFinished(true);
+      soundFX.playLessonComplete();
       try {
         confetti({ particleCount: 60, spread: 50 });
       } catch {
@@ -105,6 +114,7 @@ export default function PracticeView({
   };
 
   const handleRestartQuiz = () => {
+    soundFX.playTap();
     setCurrentQuizIdx(0);
     setSelectedOption(null);
     setQuizSubmitted(false);
@@ -114,11 +124,13 @@ export default function PracticeView({
 
   // Puzzle handlers
   const handleAddPuzzleToken = (tok: string) => {
+    soundFX.playTap();
     setPuzzleAssembled(prev => [...prev, tok]);
     setPuzzleStatus('idle');
   };
 
   const handleRemovePuzzleToken = (idx: number) => {
+    soundFX.playTap();
     setPuzzleAssembled(prev => prev.filter((_, i) => i !== idx));
     setPuzzleStatus('idle');
   };
@@ -127,14 +139,20 @@ export default function PracticeView({
     if (!currentPuzzle) return;
     const assembledStr = puzzleAssembled.join(' ');
     if (assembledStr.trim() === currentPuzzle.expectedCommand.trim()) {
+      soundFX.playCorrect();
       setPuzzleStatus('success');
       onAddXp(30);
+      setTimeout(() => {
+        soundFX.playXpGain();
+      }, 300);
     } else {
+      soundFX.playMistake();
       setPuzzleStatus('error');
     }
   };
 
   const handleNextPuzzle = () => {
+    soundFX.playTap();
     if (currentPuzzleIdx + 1 < COMMAND_PUZZLES.length) {
       setCurrentPuzzleIdx(prev => prev + 1);
       setPuzzleAssembled([]);
@@ -152,12 +170,18 @@ export default function PracticeView({
     setRescueSubmitted(true);
     const chosen = currentRescue.options[selectedRescueOption];
     if (chosen.isCorrect) {
+      soundFX.playLessonComplete();
       onCompleteRescue(currentRescue.id, 50);
+      setTimeout(() => {
+        soundFX.playXpGain();
+      }, 400);
       try {
         confetti({ particleCount: 50, spread: 60 });
       } catch {
         // ignore
       }
+    } else {
+      soundFX.playMistake();
     }
   };
 

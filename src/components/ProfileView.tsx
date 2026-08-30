@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProgress, Lesson } from '../types';
 import { MODULES } from '../data/lessonsData';
+import { soundFX } from '../utils/soundEffects';
 import {
   User,
   Zap,
@@ -165,7 +166,10 @@ export default function ProfileView({
                   </div>
 
                   <button
-                    onClick={() => onReplayLesson(lesson)}
+                    onClick={() => {
+                      soundFX.playTap();
+                      onReplayLesson(lesson);
+                    }}
                     className="shrink-0 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors"
                   >
                     <RotateCcw className="w-3 h-3" />
@@ -246,7 +250,10 @@ export default function ProfileView({
           Если вы хотите начать обучение Git с чистого листа, вы можете полностью сбросить весь прогресс, опыт и звёзды.
         </p>
         <button
-          onClick={() => setShowResetConfirm(true)}
+          onClick={() => {
+            soundFX.playTap();
+            setShowResetConfirm(true);
+          }}
           className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500 text-rose-400 active:text-white border border-rose-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -279,13 +286,17 @@ export default function ProfileView({
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowResetConfirm(false)}
+                  onClick={() => {
+                    soundFX.playTap();
+                    setShowResetConfirm(false);
+                  }}
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
                 >
                   Отмена
                 </button>
                 <button
                   onClick={() => {
+                    soundFX.playMistake();
                     onResetProgress();
                     setShowResetConfirm(false);
                   }}

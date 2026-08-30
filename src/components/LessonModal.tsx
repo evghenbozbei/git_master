@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lesson, LessonStep } from '../types';
 import confetti from 'canvas-confetti';
+import { soundFX } from '../utils/soundEffects';
 import {
   X,
   Star,
@@ -63,6 +64,7 @@ export default function LessonModal({
 
   const handleNextStep = () => {
     if (currentStepIndex + 1 < lesson.steps.length) {
+      soundFX.playTap();
       setCurrentStepIndex(prev => prev + 1);
       setCommandInput('');
       setInputError(null);
@@ -75,6 +77,10 @@ export default function LessonModal({
       const stars = mistakesCount === 0 ? 3 : mistakesCount <= 2 ? 2 : 1;
       setIsFinished(true);
       triggerConfetti();
+      soundFX.playLessonComplete();
+      setTimeout(() => {
+        soundFX.playXpGain();
+      }, 500);
       onComplete(lesson.id, stars, lesson.xpReward);
     }
   };
@@ -88,9 +94,11 @@ export default function LessonModal({
     const normalizeQuotes = (str: string) => str.replace(/['"`]/g, '"');
 
     if (normalizeQuotes(cleanInput) === normalizeQuotes(cleanRequired)) {
+      soundFX.playCorrect();
       setInputError(null);
       handleNextStep();
     } else {
+      soundFX.playMistake();
       setMistakesCount(prev => prev + 1);
       setInputError(`Не совсем так. Требуется: ${currentStep.requiredCommand}`);
     }
@@ -98,6 +106,7 @@ export default function LessonModal({
 
   const handleQuizOptionSelect = (index: number) => {
     if (quizSubmitted) return;
+    soundFX.playTap();
     setSelectedQuizIndex(index);
   };
 
@@ -105,19 +114,23 @@ export default function LessonModal({
     if (selectedQuizIndex === null || !currentStep?.quizQuestion) return;
     setQuizSubmitted(true);
     if (selectedQuizIndex === currentStep.quizQuestion.correctIndex) {
+      soundFX.playCorrect();
       setTimeout(() => {
         handleNextStep();
       }, 1400);
     } else {
+      soundFX.playMistake();
       setMistakesCount(prev => prev + 1);
     }
   };
 
   const handleTokenClick = (token: string, tokenIdx: number) => {
+    soundFX.playTap();
     setAssembledTokens(prev => [...prev, token]);
   };
 
   const handleRemoveToken = (indexToRemove: number) => {
+    soundFX.playTap();
     setAssembledTokens(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
@@ -127,14 +140,17 @@ export default function LessonModal({
     const targetStr = currentStep.orderTokens.join(' ');
 
     if (assembledStr === targetStr) {
+      soundFX.playCorrect();
       handleNextStep();
     } else {
+      soundFX.playMistake();
       setMistakesCount(prev => prev + 1);
       setInputError('Неверный порядок токенов. Попробуйте еще раз.');
     }
   };
 
   const handleRestartLesson = () => {
+    soundFX.playTap();
     setCurrentStepIndex(0);
     setCommandInput('');
     setInputError(null);

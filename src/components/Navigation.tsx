@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Map,
   Zap,
@@ -7,9 +7,12 @@ import {
   User,
   Flame,
   Star,
-  GitBranch
+  GitBranch,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { UserProgress } from '../types';
+import { soundFX } from '../utils/soundEffects';
 
 export type ActiveScreen = 'roadmap' | 'practice' | 'terminal' | 'cheatsheet' | 'profile';
 
@@ -26,6 +29,18 @@ export default function Navigation({
   progress,
   levelInfo
 }: NavigationProps) {
+  const [isMuted, setIsMuted] = useState(() => soundFX.getIsMuted());
+
+  const toggleSound = () => {
+    const nextMuted = soundFX.toggleMute();
+    setIsMuted(nextMuted);
+  };
+
+  const handleNavClick = (screen: ActiveScreen) => {
+    soundFX.playNavClick();
+    onChangeScreen(screen);
+  };
+
   const navItems: { id: ActiveScreen; label: string; icon: React.ReactNode }[] = [
     { id: 'roadmap', label: 'Обучение', icon: <Map className="w-5 h-5" /> },
     { id: 'practice', label: 'Тренажёр', icon: <Zap className="w-5 h-5" /> },
@@ -40,7 +55,7 @@ export default function Navigation({
       <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between">
         {/* Brand */}
         <div
-          onClick={() => onChangeScreen('roadmap')}
+          onClick={() => handleNavClick('roadmap')}
           className="flex items-center gap-2 cursor-pointer"
         >
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 p-0.5 shadow-md shadow-cyan-500/20">
@@ -58,18 +73,32 @@ export default function Navigation({
           </div>
         </div>
 
-        {/* Stats Badges */}
+        {/* Stats Badges & Sound Toggle */}
         <div className="flex items-center gap-2">
+          {/* Sound Toggle */}
+          <button
+            onClick={toggleSound}
+            className={`p-1.5 rounded-xl border transition-colors ${
+              isMuted
+                ? 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20'
+            }`}
+            title={isMuted ? 'Включить звук' : 'Выключить звук'}
+            aria-label="Toggle sound"
+          >
+            {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          </button>
+
           {/* Streak */}
-          <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400">
+          <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-xl text-xs font-bold text-amber-400">
             <Flame className="w-3.5 h-3.5 fill-amber-400" />
             <span>{progress.streakDays}</span>
           </div>
 
           {/* XP */}
           <div
-            onClick={() => onChangeScreen('profile')}
-            className="flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 rounded-xl text-xs font-bold text-cyan-300 cursor-pointer hover:bg-cyan-500/20 transition-colors"
+            onClick={() => handleNavClick('profile')}
+            className="flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/30 px-2 py-1 rounded-xl text-xs font-bold text-cyan-300 cursor-pointer hover:bg-cyan-500/20 transition-colors"
           >
             <Zap className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400" />
             <span>{progress.xp} XP</span>
@@ -85,7 +114,7 @@ export default function Navigation({
             return (
               <button
                 key={item.id}
-                onClick={() => onChangeScreen(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition-all ${
                   isActive
                     ? 'text-cyan-400 bg-cyan-950/50'

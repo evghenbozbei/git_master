@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GitState } from '../types';
 import { executeGitCommand, INITIAL_GIT_STATE } from '../utils/gitSimulator';
 import GitGraphVisualizer from './GitGraphVisualizer';
+import { soundFX } from '../utils/soundEffects';
 import { Terminal, Send, RotateCcw, HelpCircle, Layers, Folder, Play, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,6 +61,14 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
       newState.terminalOutput.push(output);
     }
 
+    if (output.type === 'error') {
+      soundFX.playMistake();
+    } else if (output.type === 'success') {
+      soundFX.playCorrect();
+    } else {
+      soundFX.playTap();
+    }
+
     setGitState(newState);
     setInputValue('');
     setHistoryIndex(-1);
@@ -92,6 +101,7 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
   };
 
   const handleResetSandbox = () => {
+    soundFX.playTap();
     setGitState({
       ...INITIAL_GIT_STATE,
       terminalOutput: [
@@ -141,7 +151,10 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
       <div className="flex items-center justify-between border-b border-slate-800 pb-1">
         <div className="flex gap-1">
           <button
-            onClick={() => setActiveTab('terminal')}
+            onClick={() => {
+              soundFX.playTap();
+              setActiveTab('terminal');
+            }}
             className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
               activeTab === 'terminal'
                 ? 'bg-slate-800 text-cyan-400 border border-cyan-500/30'
@@ -152,7 +165,10 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
             Терминал
           </button>
           <button
-            onClick={() => setActiveTab('files')}
+            onClick={() => {
+              soundFX.playTap();
+              setActiveTab('files');
+            }}
             className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
               activeTab === 'files'
                 ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30'

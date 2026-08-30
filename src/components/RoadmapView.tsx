@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Module, Lesson, UserProgress } from '../types';
 import { MODULES } from '../data/lessonsData';
+import { soundFX } from '../utils/soundEffects';
 import {
   GitCommit,
   GitBranch,
@@ -94,7 +95,10 @@ export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewPro
             >
               {/* Module Header / Accordion trigger */}
               <button
-                onClick={() => setExpandedModuleId(isExpanded ? '' : module.id)}
+                onClick={() => {
+                  soundFX.playTap();
+                  setExpandedModuleId(isExpanded ? '' : module.id);
+                }}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -161,7 +165,10 @@ export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewPro
                         return (
                           <div
                             key={lesson.id}
-                            onClick={() => onSelectLesson(lesson)}
+                            onClick={() => {
+                              soundFX.playTap();
+                              onSelectLesson(lesson);
+                            }}
                             className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
                               isCompleted
                                 ? 'bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/60'

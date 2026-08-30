@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Production / build artifacts
 /dist/
 /build/
 /coverage/
@@ -17,13 +17,14 @@ node_modules/
 *.local
 *.local.*
 
-# OS/editor noise
+# OS and editor noise
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
 # Logs
 *.log
@@ -31,7 +32,7 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Android / Capacitor local setup
+# Android / Capacitor local setup and generated files
 android/
 android/**/.gradle/
 android/**/.gradle_home/
@@ -51,3 +52,6 @@ android/**/.classpath
 android/**/.project
 android/**/.settings/
 android/**/*.iml
+
+# Optional: keep only source files in repo, not generated digital assets if they are created locally
+assets/*.generated.*

@@ -1,26 +1,44 @@
+# Dependencies
 node_modules/
-build/
-dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
 
-# Local project / environment setup
-.vite/
-.cache/
+# Build output
+/dist/
+/build/
+/coverage/
+/.vite/
+/.cache/
+/.parcel-cache/
+*.tsbuildinfo
+
+# Environment and local config
+.env
+.env.*
+!.env.example
 *.local
 *.local.*
 
-# Android / Capacitor generated setup
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Android / Capacitor local setup
 android/
-android/.gradle/
-android/.gradle_home/
-android/.idea/
-android/.kotlin/
-android/.cxx/
-android/local.properties
+android/**/.gradle/
+android/**/.gradle_home/
+android/**/.idea/
+android/**/.kotlin/
+android/**/.cxx/
+android/**/local.properties
 android/**/build/
 android/**/captures/
 android/**/generated/
@@ -29,15 +47,7 @@ android/**/outputs/
 android/**/tmp/
 android/**/debug/
 android/**/release/
-android/**/src/main/assets/
-android/**/src/main/res/xml/config.xml
 android/**/.classpath
 android/**/.project
 android/**/.settings/
 android/**/*.iml
-
-# Misc generated files
-*.tsbuildinfo
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*

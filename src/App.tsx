@@ -9,10 +9,12 @@ import TerminalView from './components/TerminalView';
 import CheatsheetView from './components/CheatsheetView';
 import ProfileView from './components/ProfileView';
 import LessonModal from './components/LessonModal';
+import SplashScreen from './components/SplashScreen';
 import { MODULES } from './data/lessonsData';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const {
     progress,
     levelInfo,
@@ -51,7 +53,14 @@ export default function App() {
 
   return (
     <MobileFrameWrapper>
-      <div className="flex flex-col min-h-full bg-slate-950 text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200">
+      <div className="relative flex flex-col min-h-full bg-slate-950 text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200">
+        {/* Splash Screen Overlay on startup */}
+        <AnimatePresence>
+          {showSplash && (
+            <SplashScreen onFinish={() => setShowSplash(false)} durationMs={2200} />
+          )}
+        </AnimatePresence>
+
         {/* Top Header */}
         <Navigation
           activeScreen={activeScreen}

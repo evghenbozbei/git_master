@@ -11,6 +11,7 @@ import {
   Volume2,
   VolumeX
 } from 'lucide-react';
+import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { UserProgress } from '../types';
 import { soundFX } from '../utils/soundEffects';
 
@@ -60,7 +61,7 @@ export default function Navigation({
         >
           <div className="w-8 h-8 rounded-xl overflow-hidden shadow-md shadow-cyan-500/20 border border-cyan-500/30 shrink-0">
             <img
-              src="/src/assets/images/gitmaster_app_icon_1788120621193.jpg"
+              src={appIconUrl}
               alt="GitMaster"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"

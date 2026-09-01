@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { UserProgress, Lesson } from '../types';
 import { MODULES } from '../data/lessonsData';
 import { soundFX } from '../utils/soundEffects';
@@ -244,7 +245,7 @@ export default function ProfileView({
       <div className="bg-slate-900/60 rounded-3xl border border-slate-800/80 p-4 flex items-center gap-3.5">
         <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-md shadow-cyan-500/20 border border-cyan-500/30 shrink-0">
           <img
-            src="/src/assets/images/gitmaster_app_icon_1788120621193.jpg"
+            src={appIconUrl}
             alt="GitMaster App Icon"
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"

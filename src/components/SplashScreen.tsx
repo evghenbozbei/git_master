@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { GitBranch, Terminal, Sparkles, CheckCircle2 } from 'lucide-react';
+import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { soundFX } from '../utils/soundEffects';
 
 interface SplashScreenProps {
@@ -82,7 +83,7 @@ export default function SplashScreen({ onFinish, durationMs = 2400 }: SplashScre
           className="relative w-28 h-28 rounded-3xl overflow-hidden shadow-2xl shadow-cyan-500/25 border-2 border-cyan-500/40 p-0.5 bg-gradient-to-tr from-cyan-500/30 to-emerald-500/30"
         >
           <img
-            src="/src/assets/images/gitmaster_app_icon_1788120621193.jpg"
+            src={appIconUrl}
             alt="GitMaster Logo"
             className="w-full h-full object-cover rounded-[22px]"
             referrerPolicy="no-referrer"

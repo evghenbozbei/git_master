@@ -769,3 +769,5 @@ export const MODULES: Module[] = [
     ]
   }
 ];
+
+export const ALL_LESSONS = MODULES.flatMap(m => m.lessons);

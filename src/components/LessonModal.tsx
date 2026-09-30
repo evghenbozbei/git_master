@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Lesson, LessonStep } from '../types';
 import confetti from 'canvas-confetti';
 import { soundFX } from '../utils/soundEffects';
@@ -47,6 +47,14 @@ export default function LessonModal({
   const [isFinished, setIsFinished] = useState(false);
   const [mistakesCount, setMistakesCount] = useState(0);
 
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(t => clearTimeout(t));
+    };
+  }, []);
+
   const currentStep: LessonStep | undefined = lesson.steps[currentStepIndex];
   const progressPercent = Math.round(((currentStepIndex + 1) / lesson.steps.length) * 100);
 
@@ -78,9 +86,10 @@ export default function LessonModal({
       setIsFinished(true);
       triggerConfetti();
       soundFX.playLessonComplete();
-      setTimeout(() => {
+      const t = setTimeout(() => {
         soundFX.playXpGain();
       }, 500);
+      timeoutsRef.current.push(t);
       onComplete(lesson.id, stars, lesson.xpReward);
     }
   };
@@ -115,9 +124,10 @@ export default function LessonModal({
     setQuizSubmitted(true);
     if (selectedQuizIndex === currentStep.quizQuestion.correctIndex) {
       soundFX.playCorrect();
-      setTimeout(() => {
+      const t = setTimeout(() => {
         handleNextStep();
       }, 1400);
+      timeoutsRef.current.push(t);
     } else {
       soundFX.playMistake();
       setMistakesCount(prev => prev + 1);

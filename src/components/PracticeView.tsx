@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { QuizQuestion, CommandPuzzle, RescueScenario, Flashcard } from '../types';
 import { QUIZ_QUESTIONS, COMMAND_PUZZLES, RESCUE_SCENARIOS, FLASHCARDS } from '../data/quizData';
 import confetti from 'canvas-confetti';
@@ -44,6 +44,7 @@ export default function PracticeView({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
+  const [resolvedMistakeId, setResolvedMistakeId] = useState<string | null>(null);
 
   // 2. Puzzle state
   const [currentPuzzleIdx, setCurrentPuzzleIdx] = useState(0);
@@ -58,6 +59,14 @@ export default function PracticeView({
   // 4. Flashcard state
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
+
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(t => clearTimeout(t));
+    };
+  }, []);
 
   // Quiz list (filter for mistakes mode or regular quiz)
   const quizList: QuizQuestion[] = activePracticeTab === 'mistakes'
@@ -84,11 +93,12 @@ export default function PracticeView({
       soundFX.playCorrect();
       setQuizScore(prev => prev + 1);
       onAddXp(20);
-      setTimeout(() => {
+      const t = setTimeout(() => {
         soundFX.playXpGain();
       }, 250);
+      timeoutsRef.current.push(t);
       if (activePracticeTab === 'mistakes') {
-        onResolveMistake(currentQuiz.id);
+        setResolvedMistakeId(currentQuiz.id);
       }
     } else {
       soundFX.playMistake();
@@ -98,6 +108,10 @@ export default function PracticeView({
 
   const handleNextQuiz = () => {
     soundFX.playTap();
+    if (resolvedMistakeId) {
+      onResolveMistake(resolvedMistakeId);
+      setResolvedMistakeId(null);
+    }
     if (currentQuizIdx + 1 < quizList.length) {
       setCurrentQuizIdx(prev => prev + 1);
       setSelectedOption(null);
@@ -120,6 +134,7 @@ export default function PracticeView({
     setQuizSubmitted(false);
     setQuizScore(0);
     setQuizFinished(false);
+    setResolvedMistakeId(null);
   };
 
   // Puzzle handlers
@@ -142,9 +157,10 @@ export default function PracticeView({
       soundFX.playCorrect();
       setPuzzleStatus('success');
       onAddXp(30);
-      setTimeout(() => {
+      const t = setTimeout(() => {
         soundFX.playXpGain();
       }, 300);
+      timeoutsRef.current.push(t);
     } else {
       soundFX.playMistake();
       setPuzzleStatus('error');
@@ -172,9 +188,10 @@ export default function PracticeView({
     if (chosen.isCorrect) {
       soundFX.playLessonComplete();
       onCompleteRescue(currentRescue.id, 50);
-      setTimeout(() => {
+      const t = setTimeout(() => {
         soundFX.playXpGain();
       }, 400);
+      timeoutsRef.current.push(t);
       try {
         confetti({ particleCount: 50, spread: 60 });
       } catch {

@@ -28,7 +28,31 @@ export default function GitGraphVisualizer({
       }
     });
 
-    const commitMap = new Map<string, { x: number; y: number; commit: typeof commits[0]; branch: string }>();
+    const branchesMap = new Map<string, typeof branches>();
+    branches.forEach(b => {
+      const list = branchesMap.get(b.commitId) || [];
+      list.push(b);
+      branchesMap.set(b.commitId, list);
+    });
+
+    const tagsMap = new Map<string, typeof gitState.tags>();
+    gitState.tags.forEach(t => {
+      const list = tagsMap.get(t.commitId) || [];
+      list.push(t);
+      tagsMap.set(t.commitId, list);
+    });
+
+    const commitMap = new Map<
+      string,
+      {
+        x: number;
+        y: number;
+        commit: typeof commits[0];
+        branch: string;
+        branches: typeof branches;
+        tags: typeof gitState.tags;
+      }
+    >();
 
     // Spacing
     const nodeSpacingX = 64;
@@ -40,7 +64,14 @@ export default function GitGraphVisualizer({
       const lane = branchLanes[c.branch] ?? 0;
       const x = startX + idx * nodeSpacingX;
       const y = startY + lane * laneSpacingY;
-      commitMap.set(c.id, { x, y, commit: c, branch: c.branch });
+      commitMap.set(c.id, {
+        x,
+        y,
+        commit: c,
+        branch: c.branch,
+        branches: branchesMap.get(c.id) || [],
+        tags: tagsMap.get(c.id) || []
+      });
     });
 
     const linksList: { id: string; x1: number; y1: number; x2: number; y2: number; color: string; isMerge?: boolean }[] = [];
@@ -148,11 +179,9 @@ export default function GitGraphVisualizer({
           })}
 
           {/* Commit Nodes */}
-          {nodes.map(({ x, y, commit }) => {
+          {nodes.map(({ x, y, commit, branches: branchesOnCommit, tags: tagsOnCommit }) => {
             const isHead = commit.id === gitState.headCommitId;
             const isSelected = commit.id === selectedCommitId;
-            const branchesOnCommit = gitState.branches.filter(b => b.commitId === commit.id);
-            const tagsOnCommit = gitState.tags.filter(t => t.commitId === commit.id);
 
             return (
               <g

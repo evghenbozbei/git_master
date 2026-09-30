@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { UserProgress, Achievement } from '../types';
 import { INITIAL_ACHIEVEMENTS } from '../data/achievementsData';
 
@@ -54,66 +54,84 @@ export function calculateLevel(xp: number): { level: number; title: string; curr
   };
 }
 
+function parseSavedProgress(saved: string | null): UserProgress {
+  if (!saved) return DEFAULT_PROGRESS;
+  try {
+    const parsed = JSON.parse(saved);
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_PROGRESS;
+
+    return {
+      xp: typeof parsed.xp === 'number' && !isNaN(parsed.xp) ? parsed.xp : DEFAULT_PROGRESS.xp,
+      level: typeof parsed.level === 'number' && !isNaN(parsed.level) ? parsed.level : DEFAULT_PROGRESS.level,
+      streakDays: typeof parsed.streakDays === 'number' && !isNaN(parsed.streakDays) ? parsed.streakDays : DEFAULT_PROGRESS.streakDays,
+      lastActiveDate: typeof parsed.lastActiveDate === 'string' ? parsed.lastActiveDate : DEFAULT_PROGRESS.lastActiveDate,
+      completedLessonIds: Array.isArray(parsed.completedLessonIds) ? parsed.completedLessonIds : [],
+      lessonStars: typeof parsed.lessonStars === 'object' && parsed.lessonStars !== null ? parsed.lessonStars : {},
+      completedQuizIds: Array.isArray(parsed.completedQuizIds) ? parsed.completedQuizIds : [],
+      completedPuzzleIds: Array.isArray(parsed.completedPuzzleIds) ? parsed.completedPuzzleIds : [],
+      completedRescueIds: Array.isArray(parsed.completedRescueIds) ? parsed.completedRescueIds : [],
+      mistakeQuestionIds: Array.isArray(parsed.mistakeQuestionIds) ? parsed.mistakeQuestionIds : [],
+      achievements: Array.isArray(parsed.achievements) ? parsed.achievements : INITIAL_ACHIEVEMENTS,
+      sandboxCommandsCount: typeof parsed.sandboxCommandsCount === 'number' && !isNaN(parsed.sandboxCommandsCount) ? parsed.sandboxCommandsCount : 0
+    };
+  } catch {
+    return DEFAULT_PROGRESS;
+  }
+}
+
 export function useGitProgress() {
   const [progress, setProgress] = useState<UserProgress>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return { ...DEFAULT_PROGRESS, ...parsed };
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_PROGRESS;
+    if (typeof window === 'undefined') return DEFAULT_PROGRESS;
+    return parseSavedProgress(localStorage.getItem(STORAGE_KEY));
   });
 
-  const saveProgress = useCallback((newProg: UserProgress) => {
-    setProgress(newProg);
+  // Sync state changes to localStorage safely in a side-effect
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newProg));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     } catch {
-      // ignore
+      // ignore storage quota errors
     }
-  }, []);
+  }, [progress]);
 
-  // Update streak on mount
+  // Update streak safely on initial mount
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    if (progress.lastActiveDate !== today) {
-      const lastDate = new Date(progress.lastActiveDate);
+    setProgress(prev => {
+      if (prev.lastActiveDate === today) return prev;
+
+      const lastDate = new Date(prev.lastActiveDate);
       const currentDate = new Date(today);
       const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      let newStreak = progress.streakDays;
+      let newStreak = prev.streakDays;
       if (diffDays === 1) {
         newStreak += 1;
       } else if (diffDays > 1) {
         newStreak = 1;
       }
 
-      saveProgress({
-        ...progress,
+      return {
+        ...prev,
         streakDays: newStreak,
         lastActiveDate: today
-      });
-    }
-  }, [progress, saveProgress]);
+      };
+    });
+  }, []);
 
   const addXp = useCallback((amount: number) => {
     setProgress(prev => {
       const newXp = prev.xp + amount;
       const lvlInfo = calculateLevel(newXp);
       const updatedAchievements = checkAchievements(prev, newXp, prev.completedLessonIds, prev.sandboxCommandsCount);
-      const updated: UserProgress = {
+      return {
         ...prev,
         xp: newXp,
         level: lvlInfo.level,
         achievements: updatedAchievements
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
@@ -123,13 +141,13 @@ export function useGitProgress() {
       const newCompleted = alreadyCompleted ? prev.completedLessonIds : [...prev.completedLessonIds, lessonId];
       const prevStars = prev.lessonStars[lessonId] || 0;
       const bestStars = Math.max(prevStars, stars);
-      const gainedXp = alreadyCompleted ? Math.round(xpReward * 0.3) : xpReward; // 30% XP for repeating lesson
+      const gainedXp = alreadyCompleted ? Math.round(xpReward * 0.3) : xpReward;
       const newXp = prev.xp + gainedXp;
       const lvlInfo = calculateLevel(newXp);
 
       const updatedAchievements = checkAchievements(prev, newXp, newCompleted, prev.sandboxCommandsCount);
 
-      const updated: UserProgress = {
+      return {
         ...prev,
         xp: newXp,
         level: lvlInfo.level,
@@ -137,31 +155,26 @@ export function useGitProgress() {
         lessonStars: { ...prev.lessonStars, [lessonId]: bestStars },
         achievements: updatedAchievements
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
   const recordMistake = useCallback((questionId: string) => {
     setProgress(prev => {
       if (prev.mistakeQuestionIds.includes(questionId)) return prev;
-      const updated = {
+      return {
         ...prev,
         mistakeQuestionIds: [...prev.mistakeQuestionIds, questionId]
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
   const resolveMistake = useCallback((questionId: string) => {
     setProgress(prev => {
-      const updated = {
+      if (!prev.mistakeQuestionIds.includes(questionId)) return prev;
+      return {
         ...prev,
         mistakeQuestionIds: prev.mistakeQuestionIds.filter(id => id !== questionId)
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
@@ -169,13 +182,11 @@ export function useGitProgress() {
     setProgress(prev => {
       const newCount = prev.sandboxCommandsCount + 1;
       const updatedAchievements = checkAchievements(prev, prev.xp, prev.completedLessonIds, newCount);
-      const updated = {
+      return {
         ...prev,
         sandboxCommandsCount: newCount,
         achievements: updatedAchievements
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
@@ -187,30 +198,33 @@ export function useGitProgress() {
       const lvlInfo = calculateLevel(newXp);
       const updatedAchievements = checkAchievements(prev, newXp, prev.completedLessonIds, prev.sandboxCommandsCount, newCompleted);
 
-      const updated = {
+      return {
         ...prev,
         xp: newXp,
         level: lvlInfo.level,
         completedRescueIds: newCompleted,
         achievements: updatedAchievements
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
     });
   }, []);
 
   const resetAllProgress = useCallback(() => {
     const cleanProgress: UserProgress = {
       ...DEFAULT_PROGRESS,
-      achievements: INITIAL_ACHIEVEMENTS.map(a => ({ ...a, unlocked: false, progress: a.progress ? { current: 0, max: a.progress.max } : undefined }))
+      achievements: INITIAL_ACHIEVEMENTS.map(a => ({
+        ...a,
+        unlocked: false,
+        progress: a.progress ? { current: 0, max: a.progress.max } : undefined
+      }))
     };
     setProgress(cleanProgress);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanProgress));
   }, []);
+
+  const levelInfo = useMemo(() => calculateLevel(progress.xp), [progress.xp]);
 
   return {
     progress,
-    levelInfo: calculateLevel(progress.xp),
+    levelInfo,
     addXp,
     completeLesson,
     recordMistake,
@@ -272,3 +286,4 @@ function checkAchievements(
     return ach;
   });
 }
+

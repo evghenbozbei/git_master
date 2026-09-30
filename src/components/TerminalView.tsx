@@ -24,9 +24,10 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
   useEffect(() => {
     if (initialCommand) {
       setInputValue(initialCommand);
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [initialCommand]);
 

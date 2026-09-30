@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { CHEATSHEET_COMMANDS } from '../data/cheatsheetData';
 import { soundFX } from '../utils/soundEffects';
 import { Search, BookMarked, Copy, Check, Terminal, Sparkles, Filter } from 'lucide-react';
@@ -12,6 +12,13 @@ export default function CheatsheetView({ onTestInTerminal }: CheatsheetViewProps
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Все');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const categories = [
     'Все',
@@ -22,26 +29,30 @@ export default function CheatsheetView({ onTestInTerminal }: CheatsheetViewProps
     'Продвинутые'
   ];
 
-  const filteredCommands = CHEATSHEET_COMMANDS.filter(item => {
-    const matchesCategory = selectedCategory === 'Все' || item.category === selectedCategory;
+  const filteredCommands = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !query ||
-      item.command.toLowerCase().includes(query) ||
-      item.title.toLowerCase().includes(query) ||
-      item.syntax.toLowerCase().includes(query) ||
-      item.flags.some(f => f.flag.toLowerCase().includes(query) || f.desc.toLowerCase().includes(query)) ||
-      item.examples.some(e => e.cmd.toLowerCase().includes(query) || e.desc.toLowerCase().includes(query));
+    return CHEATSHEET_COMMANDS.filter(item => {
+      const matchesCategory = selectedCategory === 'Все' || item.category === selectedCategory;
+      if (!matchesCategory) return false;
+      if (!query) return true;
 
-    return matchesCategory && matchesSearch;
-  });
+      return (
+        item.command.toLowerCase().includes(query) ||
+        item.title.toLowerCase().includes(query) ||
+        item.syntax.toLowerCase().includes(query) ||
+        item.flags.some(f => f.flag.toLowerCase().includes(query) || f.desc.toLowerCase().includes(query)) ||
+        item.examples.some(e => e.cmd.toLowerCase().includes(query) || e.desc.toLowerCase().includes(query))
+      );
+    });
+  }, [searchQuery, selectedCategory]);
 
   const handleCopy = (text: string, id: string) => {
     try {
       soundFX.playTap();
       navigator.clipboard.writeText(text);
       setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedId(null), 2000);
     } catch {
       // ignore
     }

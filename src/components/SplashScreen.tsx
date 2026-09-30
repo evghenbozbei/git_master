@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { GitBranch, Terminal, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Terminal, Sparkles, CheckCircle2 } from 'lucide-react';
 import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { soundFX } from '../utils/soundEffects';
 
@@ -17,35 +17,32 @@ const LOADING_STEPS = [
 ];
 
 export default function SplashScreen({ onFinish, durationMs = 2400 }: SplashScreenProps) {
-  const [progress, setProgress] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const pct = Math.min(Math.round((elapsed / durationMs) * 100), 100);
-      setProgress(pct);
+    const t1 = setTimeout(() => setStepIndex(1), durationMs * 0.3);
+    const t2 = setTimeout(() => setStepIndex(2), durationMs * 0.65);
+    const t3 = setTimeout(() => setStepIndex(3), durationMs * 0.9);
+    const tDone = setTimeout(() => {
+      soundFX.playTap();
+      onFinishRef.current();
+    }, durationMs);
 
-      if (pct < 30) {
-        setStepIndex(0);
-      } else if (pct < 65) {
-        setStepIndex(1);
-      } else if (pct < 90) {
-        setStepIndex(2);
-      } else {
-        setStepIndex(3);
-      }
+    timeoutsRef.current = [t1, t2, t3, tDone];
 
-      if (elapsed >= durationMs) {
-        clearInterval(interval);
-        soundFX.playTap();
-        setTimeout(onFinish, 200);
-      }
-    }, 40);
+    return () => {
+      timeoutsRef.current.forEach(t => clearTimeout(t));
+    };
+  }, [durationMs]);
 
-    return () => clearInterval(interval);
-  }, [durationMs, onFinish]);
+  const handleSkip = () => {
+    timeoutsRef.current.forEach(t => clearTimeout(t));
+    soundFX.playTap();
+    onFinishRef.current();
+  };
 
   return (
     <motion.div
@@ -118,31 +115,31 @@ export default function SplashScreen({ onFinish, durationMs = 2400 }: SplashScre
       <div className="w-full max-w-xs space-y-3 pb-6">
         <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
           <span className="flex items-center gap-1.5 text-cyan-300">
-            {progress === 100 ? (
+            {stepIndex === 3 ? (
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
               <Terminal className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             )}
             {LOADING_STEPS[stepIndex]}
           </span>
-          <span className="font-bold text-slate-300">{progress}%</span>
+          <span className="font-bold text-slate-300">
+            {stepIndex === 0 ? '25%' : stepIndex === 1 ? '60%' : stepIndex === 2 ? '85%' : '100%'}
+          </span>
         </div>
 
         {/* Progress Bar Container */}
         <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
           <motion.div
             className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full"
-            style={{ width: `${progress}%` }}
-            transition={{ ease: 'linear' }}
+            initial={{ width: '0%' }}
+            animate={{ width: '100%' }}
+            transition={{ duration: durationMs / 1000, ease: 'easeInOut' }}
           />
         </div>
 
         {/* Fast skip button */}
         <button
-          onClick={() => {
-            soundFX.playTap();
-            onFinish();
-          }}
+          onClick={handleSkip}
           className="w-full text-center text-[11px] text-slate-500 hover:text-slate-300 transition-colors pt-1"
         >
           Нажмите, чтобы пропустить ➔

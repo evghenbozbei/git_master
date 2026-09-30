@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Module, Lesson, UserProgress } from '../types';
-import { MODULES } from '../data/lessonsData';
+import { MODULES, ALL_LESSONS } from '../data/lessonsData';
 import { soundFX } from '../utils/soundEffects';
 import {
   GitCommit,
@@ -27,9 +27,11 @@ interface RoadmapViewProps {
 export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewProps) {
   const [expandedModuleId, setExpandedModuleId] = useState<string>('mod_1');
 
-  const allLessons = MODULES.flatMap(m => m.lessons);
   const completedCount = progress.completedLessonIds.length;
-  const completionPercent = Math.round((completedCount / allLessons.length) * 100);
+  const completionPercent = useMemo(
+    () => Math.round((completedCount / ALL_LESSONS.length) * 100),
+    [completedCount]
+  );
 
   const getModuleIcon = (iconName: string) => {
     switch (iconName) {

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { UserProgress, Lesson } from '../types';
-import { MODULES } from '../data/lessonsData';
+import { ALL_LESSONS } from '../data/lessonsData';
 import { soundFX } from '../utils/soundEffects';
 import {
   User,
@@ -37,12 +37,16 @@ export default function ProfileView({
 }: ProfileViewProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  // Collect all lessons flat
-  const allLessons = MODULES.flatMap(m => m.lessons);
-  const completedLessons = allLessons.filter(l => progress.completedLessonIds.includes(l.id));
+  // Collect all lessons with memoization
+  const completedLessons = useMemo(() => {
+    const completedSet = new Set(progress.completedLessonIds);
+    return ALL_LESSONS.filter(l => completedSet.has(l.id));
+  }, [progress.completedLessonIds]);
 
-  const totalPossibleStars = allLessons.length * 3;
-  const earnedStars = Object.values(progress.lessonStars).reduce((a, b) => a + b, 0);
+  const totalPossibleStars = ALL_LESSONS.length * 3;
+  const earnedStars = useMemo(() => {
+    return Object.values(progress.lessonStars).reduce((a, b) => a + b, 0);
+  }, [progress.lessonStars]);
 
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -110,7 +114,7 @@ export default function ProfileView({
         <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-3 text-center space-y-1">
           <BookOpen className="w-5 h-5 text-cyan-400 mx-auto" />
           <div className="text-base font-extrabold text-slate-100 font-mono">
-            {progress.completedLessonIds.length} <span className="text-[10px] text-slate-500 font-normal">/{allLessons.length}</span>
+            {progress.completedLessonIds.length} <span className="text-[10px] text-slate-500 font-normal">/{ALL_LESSONS.length}</span>
           </div>
           <div className="text-[10px] text-slate-400 font-medium">Уроков пройдено</div>
         </div>

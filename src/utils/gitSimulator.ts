@@ -70,6 +70,27 @@ function generateHash(): string {
   return hash;
 }
 
+function cloneGitState(state: GitState): GitState {
+  return {
+    ...state,
+    commits: state.commits.map(c => ({
+      ...c,
+      files: c.files ? c.files.map(f => ({ ...f })) : undefined
+    })),
+    branches: state.branches.map(b => ({ ...b })),
+    stagingArea: state.stagingArea.map(f => ({ ...f })),
+    workingDirectory: state.workingDirectory.map(f => ({ ...f })),
+    stashList: state.stashList.map(s => ({ ...s, files: [...s.files] })),
+    remoteBranches: state.remoteBranches.map(r => ({ ...r })),
+    tags: state.tags.map(t => ({ ...t })),
+    commandHistory: [...state.commandHistory],
+    terminalOutput: [...state.terminalOutput]
+  };
+}
+
+const MAX_HISTORY_LENGTH = 100;
+const MAX_OUTPUT_LENGTH = 200;
+
 export function executeGitCommand(
   rawCommand: string,
   state: GitState
@@ -82,8 +103,14 @@ export function executeGitCommand(
     };
   }
 
-  const newState: GitState = JSON.parse(JSON.stringify(state));
+  const newState: GitState = cloneGitState(state);
   newState.commandHistory.push(trimmed);
+  if (newState.commandHistory.length > MAX_HISTORY_LENGTH) {
+    newState.commandHistory = newState.commandHistory.slice(-MAX_HISTORY_LENGTH);
+  }
+  if (newState.terminalOutput.length > MAX_OUTPUT_LENGTH) {
+    newState.terminalOutput = newState.terminalOutput.slice(-MAX_OUTPUT_LENGTH);
+  }
 
   const parts = trimmed.split(/\s+/);
   const root = parts[0].toLowerCase();
@@ -529,19 +556,27 @@ export function executeGitCommand(
     const isHard = args.includes('--hard');
     const isSoft = args.includes('--soft');
 
-    if (newState.commits.length <= 1) {
+    const currentBranch = newState.branches.find(b => b.name === newState.activeBranch);
+    const currentCommit = newState.commits.find(c => c.id === newState.headCommitId);
+
+    if (!currentCommit || !currentCommit.parentId) {
       return {
         newState,
         output: { type: 'error', text: 'Нельзя откатить единственный начальный коммит.' }
       };
     }
 
-    const poppedCommit = newState.commits.pop()!;
-    const prevCommit = newState.commits[newState.commits.length - 1];
+    const prevCommit = newState.commits.find(c => c.id === currentCommit.parentId);
+    if (!prevCommit) {
+      return {
+        newState,
+        output: { type: 'error', text: 'Родительский коммит не найден.' }
+      };
+    }
+
     newState.headCommitId = prevCommit.id;
-    const branch = newState.branches.find(b => b.name === newState.activeBranch);
-    if (branch) {
-      branch.commitId = prevCommit.id;
+    if (currentBranch) {
+      currentBranch.commitId = prevCommit.id;
     }
 
     if (isHard) {
@@ -552,8 +587,8 @@ export function executeGitCommand(
         output: { type: 'output', text: `HEAD сейчас на ${prevCommit.hash} ${prevCommit.message} (все изменения удалены)` }
       };
     } else if (isSoft) {
-      if (poppedCommit.files) {
-        poppedCommit.files.forEach(f => {
+      if (currentCommit.files) {
+        currentCommit.files.forEach(f => {
           newState.stagingArea.push({ name: f.name, status: 'modified' });
         });
       }
@@ -562,14 +597,14 @@ export function executeGitCommand(
         output: { type: 'success', text: `HEAD откатан к ${prevCommit.hash}. Файлы коммита сохранены в Staging Area.` }
       };
     } else {
-      if (poppedCommit.files) {
-        poppedCommit.files.forEach(f => {
+      if (currentCommit.files) {
+        currentCommit.files.forEach(f => {
           newState.workingDirectory.push({ name: f.name, status: 'modified' });
         });
       }
       return {
         newState,
-        output: { type: 'output', text: `Неиндексированные изменения после сброса:\nM\t${poppedCommit.files?.map(f => f.name).join('\n') || ''}` }
+        output: { type: 'output', text: `Неиндексированные изменения после сброса:\nM\t${currentCommit.files?.map(f => f.name).join('\n') || ''}` }
       };
     }
   }

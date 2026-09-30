@@ -10,7 +10,7 @@ import CheatsheetView from './components/CheatsheetView';
 import ProfileView from './components/ProfileView';
 import LessonModal from './components/LessonModal';
 import SplashScreen from './components/SplashScreen';
-import { MODULES } from './data/lessonsData';
+import { MODULES, ALL_LESSONS } from './data/lessonsData';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -37,10 +37,9 @@ export default function App() {
 
   const handleNextLesson = () => {
     if (!activeLesson) return;
-    const allLessons = MODULES.flatMap(m => m.lessons);
-    const currIdx = allLessons.findIndex(l => l.id === activeLesson.id);
-    if (currIdx !== -1 && currIdx + 1 < allLessons.length) {
-      setActiveLesson(allLessons[currIdx + 1]);
+    const currIdx = ALL_LESSONS.findIndex(l => l.id === activeLesson.id);
+    if (currIdx !== -1 && currIdx + 1 < ALL_LESSONS.length) {
+      setActiveLesson(ALL_LESSONS[currIdx + 1]);
     } else {
       setActiveLesson(null);
     }

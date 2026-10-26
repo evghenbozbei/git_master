@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import appIconUrl from '../assets/images/gitmaster_app_icon_1788120621193.jpg';
 import { UserProgress, Lesson } from '../types';
 import { ALL_LESSONS } from '../data/lessonsData';
@@ -27,16 +27,18 @@ interface ProfileViewProps {
   levelInfo: { level: number; title: string; currentLevelXp: number; nextLevelXp: number; progressPercent: number };
   onReplayLesson: (lesson: Lesson) => void;
   onResetProgress: () => void;
+  showResetConfirm: boolean;
+  onShowResetConfirmChange: (show: boolean) => void;
 }
 
 export default function ProfileView({
   progress,
   levelInfo,
   onReplayLesson,
-  onResetProgress
+  onResetProgress,
+  showResetConfirm,
+  onShowResetConfirmChange
 }: ProfileViewProps) {
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-
   // Collect all lessons with memoization
   const completedLessons = useMemo(() => {
     const completedSet = new Set(progress.completedLessonIds);
@@ -280,7 +282,7 @@ export default function ProfileView({
         <button
           onClick={() => {
             soundFX.playTap();
-            setShowResetConfirm(true);
+            onShowResetConfirmChange(true);
           }}
           className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500 text-rose-400 active:text-white border border-rose-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
         >
@@ -316,7 +318,7 @@ export default function ProfileView({
                 <button
                   onClick={() => {
                     soundFX.playTap();
-                    setShowResetConfirm(false);
+                    onShowResetConfirmChange(false);
                   }}
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors"
                 >
@@ -326,7 +328,7 @@ export default function ProfileView({
                   onClick={() => {
                     soundFX.playMistake();
                     onResetProgress();
-                    setShowResetConfirm(false);
+                    onShowResetConfirmChange(false);
                   }}
                   className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg transition-colors"
                 >

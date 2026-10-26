@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Module, Lesson, UserProgress } from '../types';
 import { MODULES, ALL_LESSONS } from '../data/lessonsData';
 import { soundFX } from '../utils/soundEffects';
@@ -26,12 +26,43 @@ interface RoadmapViewProps {
 
 export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewProps) {
   const [expandedModuleId, setExpandedModuleId] = useState<string>('mod_1');
+  const [lockedLessonMessage, setLockedLessonMessage] = useState<string | null>(null);
+  const lockedMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lockedMessageTimerRef.current) {
+        clearTimeout(lockedMessageTimerRef.current);
+      }
+    };
+  }, []);
 
   const completedCount = progress.completedLessonIds.length;
   const completionPercent = useMemo(
     () => Math.round((completedCount / ALL_LESSONS.length) * 100),
     [completedCount]
   );
+  const lessonNumbers = useMemo(
+    () => new Map(
+      MODULES.flatMap(module =>
+        module.lessons.map((lesson, index) => [lesson.id, `${module.number}.${index + 1}`] as const)
+      )
+    ),
+    []
+  );
+
+  const showLockedLessonMessage = (previousLesson: Lesson) => {
+    if (lockedMessageTimerRef.current) {
+      clearTimeout(lockedMessageTimerRef.current);
+    }
+
+    const previousLessonNumber = lessonNumbers.get(previousLesson.id) ?? previousLesson.id;
+    setLockedLessonMessage(`Сначала пройдите урок ${previousLessonNumber}`);
+    lockedMessageTimerRef.current = setTimeout(() => {
+      setLockedLessonMessage(null);
+      lockedMessageTimerRef.current = null;
+    }, 1800);
+  };
 
   const getModuleIcon = (iconName: string) => {
     switch (iconName) {
@@ -80,6 +111,20 @@ export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewPro
           />
         </div>
       </div>
+
+      <AnimatePresence>
+        {lockedLessonMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-sm rounded-2xl border border-amber-500/30 bg-slate-900/95 px-4 py-3 text-center text-xs font-semibold text-amber-200 shadow-2xl backdrop-blur-sm pointer-events-none"
+            role="status"
+          >
+            {lockedLessonMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modules List */}
       <div className="space-y-3">
@@ -162,19 +207,29 @@ export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewPro
                       {module.lessons.map((lesson, lIdx) => {
                         const isCompleted = progress.completedLessonIds.includes(lesson.id);
                         const stars = progress.lessonStars[lesson.id] || 0;
+                        const lessonIndex = ALL_LESSONS.findIndex(item => item.id === lesson.id);
+                        const previousLesson = lessonIndex > 0 ? ALL_LESSONS[lessonIndex - 1] : null;
+                        const isLocked = !isCompleted
+                          && previousLesson !== null
+                          && !progress.completedLessonIds.includes(previousLesson.id);
 
-                        // Easy unlocking rule: Module 1 is always unlocked, other lessons unlock progressively or open
                         return (
                           <div
                             key={lesson.id}
                             onClick={() => {
                               soundFX.playTap();
+                              if (isLocked && previousLesson) {
+                                showLockedLessonMessage(previousLesson);
+                                return;
+                              }
                               onSelectLesson(lesson);
                             }}
-                            className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                            className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
                               isCompleted
-                                ? 'bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/60'
-                                : 'bg-slate-900/60 border-slate-800 hover:border-cyan-500/40 hover:bg-slate-900'
+                                ? 'cursor-pointer bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/60'
+                                : isLocked
+                                  ? 'cursor-not-allowed bg-slate-950/40 border-slate-900 opacity-60'
+                                  : 'cursor-pointer bg-slate-900/60 border-slate-800 hover:border-cyan-500/40 hover:bg-slate-900'
                             }`}
                           >
                             <div className="min-w-0 flex-1">
@@ -215,6 +270,10 @@ export default function RoadmapView({ progress, onSelectLesson }: RoadmapViewPro
                                     ))}
                                   </div>
                                   <span className="text-[9px] text-emerald-400 font-medium">Пройден</span>
+                                </div>
+                              ) : isLocked ? (
+                                <div className="p-2 bg-slate-800/60 text-slate-500 rounded-xl border border-slate-700/50">
+                                  <Lock className="w-3.5 h-3.5" />
                                 </div>
                               ) : (
                                 <div className="p-2 bg-cyan-500/10 text-cyan-300 rounded-xl border border-cyan-500/20">

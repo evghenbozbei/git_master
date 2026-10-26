@@ -1,5 +1,8 @@
 // Web Audio API lightweight sound synthesizer
 // No external MP3/WAV assets needed, zero latency, works seamlessly on web and mobile.
+import { safeStorage } from './safeStorage';
+
+const MUTED_STORAGE_KEY = 'gitmaster_sound_muted';
 
 class SoundFXEngine {
   private ctx: AudioContext | null = null;
@@ -7,10 +10,7 @@ class SoundFXEngine {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('gitmaster_sound_muted');
-      if (stored !== null) {
-        this.isMuted = stored === 'true';
-      }
+      this.isMuted = safeStorage.get(MUTED_STORAGE_KEY) === 'true';
     }
   }
 
@@ -31,7 +31,7 @@ class SoundFXEngine {
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('gitmaster_sound_muted', String(this.isMuted));
+      safeStorage.set(MUTED_STORAGE_KEY, String(this.isMuted));
     }
     if (!this.isMuted) {
       this.playTap();

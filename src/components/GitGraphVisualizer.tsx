@@ -14,11 +14,12 @@ export default function GitGraphVisualizer({
   onSelectCommit,
   selectedCommitId
 }: GitGraphVisualizerProps) {
-  // Layout nodes algorithm for linear/branching commit graph
-  const { nodes, links, width, height } = useMemo(() => {
-    const commits = gitState.commits;
-    const branches = gitState.branches;
+  const { commits, branches, tags } = gitState;
 
+  // Layout nodes algorithm for linear/branching commit graph.
+  // Depends only on the graph collections: the simulator keeps their references stable
+  // for commands that don't touch them (status, log, diff...), so layout is not recomputed.
+  const { nodes, links, width, height } = useMemo(() => {
     // Assign branch vertical lanes (y)
     const branchLanes: Record<string, number> = {};
     let laneCount = 0;
@@ -35,8 +36,8 @@ export default function GitGraphVisualizer({
       branchesMap.set(b.commitId, list);
     });
 
-    const tagsMap = new Map<string, typeof gitState.tags>();
-    gitState.tags.forEach(t => {
+    const tagsMap = new Map<string, typeof tags>();
+    tags.forEach(t => {
       const list = tagsMap.get(t.commitId) || [];
       list.push(t);
       tagsMap.set(t.commitId, list);
@@ -50,7 +51,7 @@ export default function GitGraphVisualizer({
         commit: typeof commits[0];
         branch: string;
         branches: typeof branches;
-        tags: typeof gitState.tags;
+        tags: typeof tags;
       }
     >();
 
@@ -119,7 +120,7 @@ export default function GitGraphVisualizer({
       width: calculatedWidth,
       height: calculatedHeight
     };
-  }, [gitState]);
+  }, [commits, branches, tags]);
 
   return (
     <div className="w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-3 overflow-hidden shadow-xl backdrop-blur-md">

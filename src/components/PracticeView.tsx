@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { QuizQuestion, CommandPuzzle, RescueScenario, Flashcard } from '../types';
 import { QUIZ_QUESTIONS, COMMAND_PUZZLES, RESCUE_SCENARIOS, FLASHCARDS } from '../data/quizData';
 import confetti from 'canvas-confetti';
 import { soundFX } from '../utils/soundEffects';
+import { useSafeTimeout } from '../hooks/useSafeTimeout';
 import {
   Zap,
   Puzzle,
@@ -22,18 +23,26 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PracticeViewProps {
-  onAddXp: (amount: number) => void;
+  onCompleteQuizQuestion: (questionId: string, xp: number) => void;
+  onCompletePuzzle: (puzzleId: string, xp: number) => void;
+  onUnlockAchievement: (achievementId: string) => void;
   onMistake: (questionId: string) => void;
   onResolveMistake: (questionId: string) => void;
   onCompleteRescue: (scenarioId: string, xp: number) => void;
+  completedQuizIds: string[];
+  completedPuzzleIds: string[];
   mistakeQuestionIds: string[];
 }
 
 export default function PracticeView({
-  onAddXp,
+  onCompleteQuizQuestion,
+  onCompletePuzzle,
+  onUnlockAchievement,
   onMistake,
   onResolveMistake,
   onCompleteRescue,
+  completedQuizIds,
+  completedPuzzleIds,
   mistakeQuestionIds
 }: PracticeViewProps) {
   const [activePracticeTab, setActivePracticeTab] = useState<'quiz' | 'puzzles' | 'rescue' | 'flashcards' | 'mistakes'>('quiz');
@@ -43,6 +52,9 @@ export default function PracticeView({
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
+  const [quizXpEarned, setQuizXpEarned] = useState(0);
+  const [quizEarnedXpForCurrentQuestion, setQuizEarnedXpForCurrentQuestion] = useState(false);
+  const [quizHadIncorrectAnswer, setQuizHadIncorrectAnswer] = useState(false);
   const [quizFinished, setQuizFinished] = useState(false);
   const [resolvedMistakeId, setResolvedMistakeId] = useState<string | null>(null);
 
@@ -50,6 +62,7 @@ export default function PracticeView({
   const [currentPuzzleIdx, setCurrentPuzzleIdx] = useState(0);
   const [puzzleAssembled, setPuzzleAssembled] = useState<string[]>([]);
   const [puzzleStatus, setPuzzleStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [puzzleEarnedXp, setPuzzleEarnedXp] = useState(false);
 
   // 3. Rescue Scenario state
   const [currentRescueIdx, setCurrentRescueIdx] = useState(0);
@@ -60,18 +73,18 @@ export default function PracticeView({
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
 
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  // Mistakes are snapshotted when the round starts: resolving a question removes it from
+  // mistakeQuestionIds, which must not shift the list (and index) mid-round.
+  const [mistakesRoundIds, setMistakesRoundIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    return () => {
-      timeoutsRef.current.forEach(t => clearTimeout(t));
-    };
-  }, []);
+  const schedule = useSafeTimeout();
 
-  // Quiz list (filter for mistakes mode or regular quiz)
-  const quizList: QuizQuestion[] = activePracticeTab === 'mistakes'
-    ? QUIZ_QUESTIONS.filter(q => mistakeQuestionIds.includes(q.id))
-    : QUIZ_QUESTIONS;
+  const mistakesQuizList = useMemo(() => {
+    const ids = new Set(mistakesRoundIds);
+    return QUIZ_QUESTIONS.filter(q => ids.has(q.id));
+  }, [mistakesRoundIds]);
+
+  const quizList: QuizQuestion[] = activePracticeTab === 'mistakes' ? mistakesQuizList : QUIZ_QUESTIONS;
 
   const currentQuiz = quizList[currentQuizIdx];
   const currentPuzzle = COMMAND_PUZZLES[currentPuzzleIdx];
@@ -90,18 +103,21 @@ export default function PracticeView({
     const isCorrect = selectedOption === currentQuiz.correctIndex;
 
     if (isCorrect) {
+      const isFirstCompletion = !completedQuizIds.includes(currentQuiz.id);
       soundFX.playCorrect();
       setQuizScore(prev => prev + 1);
-      onAddXp(20);
-      const t = setTimeout(() => {
-        soundFX.playXpGain();
-      }, 250);
-      timeoutsRef.current.push(t);
+      setQuizEarnedXpForCurrentQuestion(isFirstCompletion);
+      if (isFirstCompletion) {
+        setQuizXpEarned(prev => prev + 20);
+        schedule(() => soundFX.playXpGain(), 250);
+      }
+      onCompleteQuizQuestion(currentQuiz.id, 20);
       if (activePracticeTab === 'mistakes') {
         setResolvedMistakeId(currentQuiz.id);
       }
     } else {
       soundFX.playMistake();
+      setQuizHadIncorrectAnswer(true);
       onMistake(currentQuiz.id);
     }
   };
@@ -116,7 +132,15 @@ export default function PracticeView({
       setCurrentQuizIdx(prev => prev + 1);
       setSelectedOption(null);
       setQuizSubmitted(false);
+      setQuizEarnedXpForCurrentQuestion(false);
     } else {
+      if (
+        activePracticeTab === 'quiz'
+        && quizScore === quizList.length
+        && !quizHadIncorrectAnswer
+      ) {
+        onUnlockAchievement('ach_quiz_champ');
+      }
       setQuizFinished(true);
       soundFX.playLessonComplete();
       try {
@@ -129,10 +153,16 @@ export default function PracticeView({
 
   const handleRestartQuiz = () => {
     soundFX.playTap();
+    if (activePracticeTab === 'mistakes') {
+      setMistakesRoundIds(mistakeQuestionIds);
+    }
     setCurrentQuizIdx(0);
     setSelectedOption(null);
     setQuizSubmitted(false);
     setQuizScore(0);
+    setQuizXpEarned(0);
+    setQuizEarnedXpForCurrentQuestion(false);
+    setQuizHadIncorrectAnswer(false);
     setQuizFinished(false);
     setResolvedMistakeId(null);
   };
@@ -154,13 +184,14 @@ export default function PracticeView({
     if (!currentPuzzle) return;
     const assembledStr = puzzleAssembled.join(' ');
     if (assembledStr.trim() === currentPuzzle.expectedCommand.trim()) {
+      const isFirstCompletion = !completedPuzzleIds.includes(currentPuzzle.id);
       soundFX.playCorrect();
       setPuzzleStatus('success');
-      onAddXp(30);
-      const t = setTimeout(() => {
-        soundFX.playXpGain();
-      }, 300);
-      timeoutsRef.current.push(t);
+      setPuzzleEarnedXp(isFirstCompletion);
+      if (isFirstCompletion) {
+        schedule(() => soundFX.playXpGain(), 300);
+      }
+      onCompletePuzzle(currentPuzzle.id, 30);
     } else {
       soundFX.playMistake();
       setPuzzleStatus('error');
@@ -173,10 +204,12 @@ export default function PracticeView({
       setCurrentPuzzleIdx(prev => prev + 1);
       setPuzzleAssembled([]);
       setPuzzleStatus('idle');
+      setPuzzleEarnedXp(false);
     } else {
       setCurrentPuzzleIdx(0);
       setPuzzleAssembled([]);
       setPuzzleStatus('idle');
+      setPuzzleEarnedXp(false);
     }
   };
 
@@ -188,10 +221,7 @@ export default function PracticeView({
     if (chosen.isCorrect) {
       soundFX.playLessonComplete();
       onCompleteRescue(currentRescue.id, 50);
-      const t = setTimeout(() => {
-        soundFX.playXpGain();
-      }, 400);
-      timeoutsRef.current.push(t);
+      schedule(() => soundFX.playXpGain(), 400);
       try {
         confetti({ particleCount: 50, spread: 60 });
       } catch {
@@ -280,6 +310,7 @@ export default function PracticeView({
             onClick={() => {
               setActivePracticeTab('mistakes');
               handleRestartQuiz();
+              setMistakesRoundIds(mistakeQuestionIds);
             }}
             className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activePracticeTab === 'mistakes'
@@ -323,7 +354,11 @@ export default function PracticeView({
               </div>
 
               <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-300">
-                Заработано: <span className="text-amber-400 font-bold">+{quizScore * 20} XP</span>
+                {quizXpEarned > 0 ? (
+                  <>Заработано: <span className="text-amber-400 font-bold">+{quizXpEarned} XP</span></>
+                ) : (
+                  <span className="text-slate-400 font-semibold">Новые XP не начислены — вопросы уже решены</span>
+                )}
               </div>
 
               <button
@@ -406,7 +441,7 @@ export default function PracticeView({
                     {selectedOption === currentQuiz?.correctIndex ? (
                       <>
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        <span>Верно! (+20 XP)</span>
+                        <span>{quizEarnedXpForCurrentQuestion ? 'Верно! (+20 XP)' : 'Верно! (уже решено)'}</span>
                       </>
                     ) : (
                       <>
@@ -454,7 +489,9 @@ export default function PracticeView({
             <span className="font-bold text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800/50">
               Головоломка {currentPuzzleIdx + 1} из {COMMAND_PUZZLES.length}
             </span>
-            <span className="text-xs text-slate-400">+30 XP</span>
+            <span className="text-xs text-slate-400">
+              {!completedPuzzleIds.includes(currentPuzzle.id) || puzzleEarnedXp ? '+30 XP' : 'уже решено'}
+            </span>
           </div>
 
           <div>
@@ -508,7 +545,7 @@ export default function PracticeView({
             <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-xs text-emerald-300 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Идеально! (+30 XP)</span>
+                <span>{puzzleEarnedXp ? 'Идеально! (+30 XP)' : 'Идеально! (уже решено)'}</span>
               </div>
               <p>{currentPuzzle.explanation}</p>
             </div>
@@ -519,6 +556,7 @@ export default function PracticeView({
               onClick={() => {
                 setPuzzleAssembled([]);
                 setPuzzleStatus('idle');
+                setPuzzleEarnedXp(false);
               }}
               className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl border border-slate-700"
             >

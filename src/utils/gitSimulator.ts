@@ -70,22 +70,53 @@ function generateHash(): string {
   return hash;
 }
 
-function cloneGitState(state: GitState): GitState {
-  return {
-    ...state,
-    commits: state.commits.map(c => ({
-      ...c,
-      files: c.files ? c.files.map(f => ({ ...f })) : undefined
-    })),
-    branches: state.branches.map(b => ({ ...b })),
-    stagingArea: state.stagingArea.map(f => ({ ...f })),
-    workingDirectory: state.workingDirectory.map(f => ({ ...f })),
-    stashList: state.stashList.map(s => ({ ...s, files: [...s.files] })),
-    remoteBranches: state.remoteBranches.map(r => ({ ...r })),
-    tags: state.tags.map(t => ({ ...t })),
-    commandHistory: [...state.commandHistory],
-    terminalOutput: [...state.terminalOutput]
-  };
+type GitOutput = GitState['terminalOutput'][number];
+
+const ARRAY_KEYS = [
+  'commits',
+  'branches',
+  'stagingArea',
+  'workingDirectory',
+  'stashList',
+  'remoteBranches',
+  'tags',
+  'commandHistory',
+  'terminalOutput'
+] as const;
+
+type GitArrayKey = typeof ARRAY_KEYS[number];
+
+/**
+ * Copy-on-write draft: only the top-level arrays are copied (O(n) pointer copies), items are shared.
+ * INVARIANT: command handlers may push/splice/reassign the draft arrays, but must NEVER mutate
+ * an item in place (replace it with a new object instead) — items are shared with the previous state.
+ */
+function createDraft(state: GitState): GitState {
+  const draft = { ...state };
+  for (const key of ARRAY_KEYS) {
+    (draft as Record<GitArrayKey, unknown[]>)[key] = [...state[key]];
+  }
+  return draft;
+}
+
+/** Restores the previous array references for collections the command did not change. */
+function reuseUnchangedArrays(prev: GitState, next: GitState): GitState {
+  for (const key of ARRAY_KEYS) {
+    const a: readonly unknown[] = prev[key];
+    const b: readonly unknown[] = next[key];
+    if (a.length === b.length && a.every((item, i) => item === b[i])) {
+      (next as Record<GitArrayKey, unknown[]>)[key] = prev[key];
+    }
+  }
+  return next;
+}
+
+/** Points HEAD and the active branch at `commitId` without mutating the shared branch object. */
+function moveActiveBranch(state: GitState, commitId: string) {
+  state.headCommitId = commitId;
+  state.branches = state.branches.map(b =>
+    b.name === state.activeBranch ? { ...b, commitId } : b
+  );
 }
 
 const MAX_HISTORY_LENGTH = 100;
@@ -94,7 +125,7 @@ const MAX_OUTPUT_LENGTH = 200;
 export function executeGitCommand(
   rawCommand: string,
   state: GitState
-): { newState: GitState; output: { type: 'cmd' | 'output' | 'error' | 'success' | 'info'; text: string } } {
+): { newState: GitState; output: GitOutput } {
   const trimmed = rawCommand.trim();
   if (!trimmed) {
     return {
@@ -103,15 +134,28 @@ export function executeGitCommand(
     };
   }
 
-  const newState: GitState = cloneGitState(state);
-  newState.commandHistory.push(trimmed);
-  if (newState.commandHistory.length > MAX_HISTORY_LENGTH) {
-    newState.commandHistory = newState.commandHistory.slice(-MAX_HISTORY_LENGTH);
-  }
-  if (newState.terminalOutput.length > MAX_OUTPUT_LENGTH) {
-    newState.terminalOutput = newState.terminalOutput.slice(-MAX_OUTPUT_LENGTH);
+  const draft = createDraft(state);
+  draft.commandHistory.push(trimmed);
+  if (draft.commandHistory.length > MAX_HISTORY_LENGTH) {
+    draft.commandHistory = draft.commandHistory.slice(-MAX_HISTORY_LENGTH);
   }
 
+  const { output } = runGitCommand(trimmed, draft);
+
+  if (output.text) {
+    draft.terminalOutput.push(output);
+    if (draft.terminalOutput.length > MAX_OUTPUT_LENGTH) {
+      draft.terminalOutput = draft.terminalOutput.slice(-MAX_OUTPUT_LENGTH);
+    }
+  }
+
+  return { newState: reuseUnchangedArrays(state, draft), output };
+}
+
+function runGitCommand(
+  trimmed: string,
+  newState: GitState
+): { newState: GitState; output: GitOutput } {
   const parts = trimmed.split(/\s+/);
   const root = parts[0].toLowerCase();
   const sub = parts[1]?.toLowerCase();
@@ -300,11 +344,7 @@ export function executeGitCommand(
     };
 
     newState.commits.push(newCommit);
-    newState.headCommitId = newCommitId;
-
-    if (currentBranchObj) {
-      currentBranchObj.commitId = newCommitId;
-    }
+    moveActiveBranch(newState, newCommitId);
 
     return {
       newState,
@@ -457,10 +497,7 @@ export function executeGitCommand(
     };
 
     newState.commits.push(mergeCommit);
-    newState.headCommitId = newCommitId;
-    if (currentBranchObj) {
-      currentBranchObj.commitId = newCommitId;
-    }
+    moveActiveBranch(newState, newCommitId);
 
     return {
       newState,
@@ -556,7 +593,6 @@ export function executeGitCommand(
     const isHard = args.includes('--hard');
     const isSoft = args.includes('--soft');
 
-    const currentBranch = newState.branches.find(b => b.name === newState.activeBranch);
     const currentCommit = newState.commits.find(c => c.id === newState.headCommitId);
 
     if (!currentCommit || !currentCommit.parentId) {
@@ -574,10 +610,7 @@ export function executeGitCommand(
       };
     }
 
-    newState.headCommitId = prevCommit.id;
-    if (currentBranch) {
-      currentBranch.commitId = prevCommit.id;
-    }
+    moveActiveBranch(newState, prevCommit.id);
 
     if (isHard) {
       newState.workingDirectory = [];
@@ -639,9 +672,7 @@ export function executeGitCommand(
       color: BRANCH_COLORS[0]
     };
     newState.commits.push(revCommit);
-    newState.headCommitId = newCommitId;
-    const branch = newState.branches.find(b => b.name === newState.activeBranch);
-    if (branch) branch.commitId = newCommitId;
+    moveActiveBranch(newState, newCommitId);
 
     return {
       newState,
@@ -670,17 +701,20 @@ export function executeGitCommand(
 
   // git push
   if (sub === 'push') {
-    let remote = newState.remoteBranches.find(r => r.name === `origin/${newState.activeBranch}`);
-    if (!remote) {
-      remote = {
-        name: `origin/${newState.activeBranch}`,
+    const remoteName = `origin/${newState.activeBranch}`;
+    const remoteIdx = newState.remoteBranches.findIndex(r => r.name === remoteName);
+    if (remoteIdx === -1) {
+      newState.remoteBranches.push({
+        name: remoteName,
         commitId: newState.headCommitId,
         color: '#64748b',
         isRemote: true
-      };
-      newState.remoteBranches.push(remote);
+      });
     } else {
-      remote.commitId = newState.headCommitId;
+      newState.remoteBranches[remoteIdx] = {
+        ...newState.remoteBranches[remoteIdx],
+        commitId: newState.headCommitId
+      };
     }
     return {
       newState,
@@ -821,10 +855,7 @@ export function executeGitCommand(
     };
 
     newState.commits.push(cpCommit);
-    newState.headCommitId = newCommitId;
-    if (currentBranchObj) {
-      currentBranchObj.commitId = newCommitId;
-    }
+    moveActiveBranch(newState, newCommitId);
 
     return {
       newState,

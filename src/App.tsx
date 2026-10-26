@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { useGitProgress } from './hooks/useGitProgress';
 import { Lesson } from './types';
 import Navigation, { ActiveScreen } from './components/Navigation';
@@ -18,7 +20,9 @@ export default function App() {
   const {
     progress,
     levelInfo,
-    addXp,
+    completeQuizQuestion,
+    completePuzzle,
+    unlockAchievement,
     completeLesson,
     recordMistake,
     resolveMistake,
@@ -29,7 +33,50 @@ export default function App() {
 
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('roadmap');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [terminalInitialCommand, setTerminalInitialCommand] = useState<string>('');
+  const navigationStateRef = useRef({ activeScreen, activeLesson, showResetConfirm });
+
+  navigationStateRef.current = { activeScreen, activeLesson, showResetConfirm };
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let listenerRemoved = false;
+    let removeListener: (() => Promise<void>) | undefined;
+
+    void CapacitorApp.addListener('backButton', () => {
+      const currentState = navigationStateRef.current;
+
+      if (currentState.activeLesson) {
+        setActiveLesson(null);
+        return;
+      }
+
+      if (currentState.showResetConfirm) {
+        setShowResetConfirm(false);
+        return;
+      }
+
+      if (currentState.activeScreen !== 'roadmap') {
+        setActiveScreen('roadmap');
+        return;
+      }
+
+      void CapacitorApp.minimizeApp();
+    }).then(handle => {
+      if (listenerRemoved) {
+        void handle.remove();
+      } else {
+        removeListener = () => handle.remove();
+      }
+    });
+
+    return () => {
+      listenerRemoved = true;
+      void removeListener?.();
+    };
+  }, []);
 
   const handleLessonComplete = (lessonId: string, stars: number, xpReward: number) => {
     completeLesson(lessonId, stars, xpReward);
@@ -95,10 +142,14 @@ export default function App() {
                 transition={{ duration: 0.2 }}
               >
                 <PracticeView
-                  onAddXp={addXp}
+                  onCompleteQuizQuestion={completeQuizQuestion}
+                  onCompletePuzzle={completePuzzle}
+                  onUnlockAchievement={unlockAchievement}
                   onMistake={recordMistake}
                   onResolveMistake={resolveMistake}
                   onCompleteRescue={completeRescue}
+                  completedQuizIds={progress.completedQuizIds}
+                  completedPuzzleIds={progress.completedPuzzleIds}
                   mistakeQuestionIds={progress.mistakeQuestionIds}
                 />
               </motion.div>
@@ -144,6 +195,8 @@ export default function App() {
                   levelInfo={levelInfo}
                   onReplayLesson={lesson => setActiveLesson(lesson)}
                   onResetProgress={resetAllProgress}
+                  showResetConfirm={showResetConfirm}
+                  onShowResetConfirmChange={setShowResetConfirm}
                 />
               </motion.div>
             )}
@@ -154,6 +207,7 @@ export default function App() {
         <AnimatePresence>
           {activeLesson && (
             <LessonModal
+              key={activeLesson.id}
               lesson={activeLesson}
               onClose={() => setActiveLesson(null)}
               onComplete={handleLessonComplete}

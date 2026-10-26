@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Lesson, LessonStep } from '../types';
 import confetti from 'canvas-confetti';
 import { soundFX } from '../utils/soundEffects';
+import { useSafeTimeout } from '../hooks/useSafeTimeout';
 import {
   X,
   Star,
@@ -46,14 +47,10 @@ export default function LessonModal({
   const [showHint, setShowHint] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [mistakesCount, setMistakesCount] = useState(0);
+  const [wasCompletedOnOpen, setWasCompletedOnOpen] = useState(Boolean(isAlreadyCompleted));
+  const [gainedXp, setGainedXp] = useState<number | null>(null);
 
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
-
-  useEffect(() => {
-    return () => {
-      timeoutsRef.current.forEach(t => clearTimeout(t));
-    };
-  }, []);
+  const schedule = useSafeTimeout();
 
   const currentStep: LessonStep | undefined = lesson.steps[currentStepIndex];
   const progressPercent = Math.round(((currentStepIndex + 1) / lesson.steps.length) * 100);
@@ -83,13 +80,14 @@ export default function LessonModal({
     } else {
       // Finished lesson!
       const stars = mistakesCount === 0 ? 3 : mistakesCount <= 2 ? 2 : 1;
+      const earnedXp = wasCompletedOnOpen
+        ? Math.round(lesson.xpReward * 0.3)
+        : lesson.xpReward;
+      setGainedXp(earnedXp);
       setIsFinished(true);
       triggerConfetti();
       soundFX.playLessonComplete();
-      const t = setTimeout(() => {
-        soundFX.playXpGain();
-      }, 500);
-      timeoutsRef.current.push(t);
+      schedule(() => soundFX.playXpGain(), 500);
       onComplete(lesson.id, stars, lesson.xpReward);
     }
   };
@@ -124,10 +122,7 @@ export default function LessonModal({
     setQuizSubmitted(true);
     if (selectedQuizIndex === currentStep.quizQuestion.correctIndex) {
       soundFX.playCorrect();
-      const t = setTimeout(() => {
-        handleNextStep();
-      }, 1400);
-      timeoutsRef.current.push(t);
+      schedule(handleNextStep, 1400);
     } else {
       soundFX.playMistake();
       setMistakesCount(prev => prev + 1);
@@ -170,6 +165,8 @@ export default function LessonModal({
     setShowHint(false);
     setIsFinished(false);
     setMistakesCount(0);
+    setWasCompletedOnOpen(true);
+    setGainedXp(null);
     setActiveTab('practice');
   };
 
@@ -289,7 +286,7 @@ export default function LessonModal({
                 <div className="flex items-center gap-4 bg-slate-800/60 px-4 py-2.5 rounded-xl border border-slate-700/60 text-xs">
                   <div className="flex items-center gap-1.5 text-amber-300 font-bold">
                     <Zap className="w-4 h-4 text-amber-400" />
-                    <span>+{isAlreadyCompleted ? Math.round(lesson.xpReward * 0.3) : lesson.xpReward} XP</span>
+                    <span>+{gainedXp ?? lesson.xpReward} XP</span>
                   </div>
                   <div className="h-4 w-px bg-slate-700" />
                   <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">

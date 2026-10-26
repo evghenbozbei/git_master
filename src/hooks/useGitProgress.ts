@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { UserProgress, Achievement } from '../types';
 import { INITIAL_ACHIEVEMENTS } from '../data/achievementsData';
+import { ALL_LESSONS } from '../data/lessonsData';
+import { safeStorage } from '../utils/safeStorage';
 
-const STORAGE_KEY = 'gitmaster_user_progress_v2';
+export const STORAGE_KEY = 'gitmaster_user_progress_v2';
+const SAVE_DEBOUNCE_MS = 300;
 
 const DEFAULT_PROGRESS: UserProgress = {
   xp: 0,
@@ -54,25 +57,71 @@ export function calculateLevel(xp: number): { level: number; title: string; curr
   };
 }
 
+const num = (v: unknown, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+
+const strArr = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+function parseLessonStars(v: unknown): Record<string, number> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const result: Record<string, number> = {};
+  for (const [id, stars] of Object.entries(v)) {
+    if (typeof stars === 'number' && Number.isFinite(stars)) {
+      result[id] = Math.min(3, Math.max(0, Math.round(stars)));
+    }
+  }
+  return result;
+}
+
+// Definitions (title, description, rarity...) always come from code; storage only supplies
+// unlock state. Malformed entries are ignored and newly added achievements show up for old users.
+function mergeAchievements(saved: unknown): Achievement[] {
+  const byId = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(saved)) {
+    for (const a of saved) {
+      if (a && typeof a === 'object' && typeof (a as { id?: unknown }).id === 'string') {
+        byId.set((a as { id: string }).id, a as Record<string, unknown>);
+      }
+    }
+  }
+
+  return INITIAL_ACHIEVEMENTS.map(def => {
+    const s = byId.get(def.id);
+    if (!s) return def;
+    const savedProgress = s.progress as { current?: unknown } | undefined;
+    const current = num(savedProgress?.current, 0);
+    return {
+      ...def,
+      unlocked: s.unlocked === true,
+      unlockedAt: typeof s.unlockedAt === 'string' ? s.unlockedAt : undefined,
+      progress: def.progress
+        ? { current: Math.min(Math.max(0, current), def.progress.max), max: def.progress.max }
+        : undefined
+    };
+  });
+}
+
 function parseSavedProgress(saved: string | null): UserProgress {
   if (!saved) return DEFAULT_PROGRESS;
   try {
     const parsed = JSON.parse(saved);
     if (!parsed || typeof parsed !== 'object') return DEFAULT_PROGRESS;
 
+    const xp = Math.max(0, num(parsed.xp, DEFAULT_PROGRESS.xp));
     return {
-      xp: typeof parsed.xp === 'number' && !isNaN(parsed.xp) ? parsed.xp : DEFAULT_PROGRESS.xp,
-      level: typeof parsed.level === 'number' && !isNaN(parsed.level) ? parsed.level : DEFAULT_PROGRESS.level,
-      streakDays: typeof parsed.streakDays === 'number' && !isNaN(parsed.streakDays) ? parsed.streakDays : DEFAULT_PROGRESS.streakDays,
+      xp,
+      level: calculateLevel(xp).level,
+      streakDays: Math.max(1, num(parsed.streakDays, DEFAULT_PROGRESS.streakDays)),
       lastActiveDate: typeof parsed.lastActiveDate === 'string' ? parsed.lastActiveDate : DEFAULT_PROGRESS.lastActiveDate,
-      completedLessonIds: Array.isArray(parsed.completedLessonIds) ? parsed.completedLessonIds : [],
-      lessonStars: typeof parsed.lessonStars === 'object' && parsed.lessonStars !== null ? parsed.lessonStars : {},
-      completedQuizIds: Array.isArray(parsed.completedQuizIds) ? parsed.completedQuizIds : [],
-      completedPuzzleIds: Array.isArray(parsed.completedPuzzleIds) ? parsed.completedPuzzleIds : [],
-      completedRescueIds: Array.isArray(parsed.completedRescueIds) ? parsed.completedRescueIds : [],
-      mistakeQuestionIds: Array.isArray(parsed.mistakeQuestionIds) ? parsed.mistakeQuestionIds : [],
-      achievements: Array.isArray(parsed.achievements) ? parsed.achievements : INITIAL_ACHIEVEMENTS,
-      sandboxCommandsCount: typeof parsed.sandboxCommandsCount === 'number' && !isNaN(parsed.sandboxCommandsCount) ? parsed.sandboxCommandsCount : 0
+      completedLessonIds: strArr(parsed.completedLessonIds),
+      lessonStars: parseLessonStars(parsed.lessonStars),
+      completedQuizIds: strArr(parsed.completedQuizIds),
+      completedPuzzleIds: strArr(parsed.completedPuzzleIds),
+      completedRescueIds: strArr(parsed.completedRescueIds),
+      mistakeQuestionIds: strArr(parsed.mistakeQuestionIds),
+      achievements: mergeAchievements(parsed.achievements),
+      sandboxCommandsCount: Math.max(0, num(parsed.sandboxCommandsCount, 0))
     };
   } catch {
     return DEFAULT_PROGRESS;
@@ -82,18 +131,39 @@ function parseSavedProgress(saved: string | null): UserProgress {
 export function useGitProgress() {
   const [progress, setProgress] = useState<UserProgress>(() => {
     if (typeof window === 'undefined') return DEFAULT_PROGRESS;
-    return parseSavedProgress(localStorage.getItem(STORAGE_KEY));
+    return parseSavedProgress(safeStorage.get(STORAGE_KEY));
   });
 
-  // Sync state changes to localStorage safely in a side-effect
+  // Debounced persistence: frequent updates (e.g. every sandbox command) collapse into one
+  // JSON.stringify + write. Pending data is flushed when the app is hidden or closed.
+  const latestProgressRef = useRef(progress);
+  const isDirtyRef = useRef(false);
+
+  const flushProgress = useCallback(() => {
+    if (!isDirtyRef.current) return;
+    isDirtyRef.current = false;
+    safeStorage.set(STORAGE_KEY, JSON.stringify(latestProgressRef.current));
+  }, []);
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-    } catch {
-      // ignore storage quota errors
-    }
-  }, [progress]);
+    latestProgressRef.current = progress;
+    isDirtyRef.current = true;
+    const timer = setTimeout(flushProgress, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [progress, flushProgress]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushProgress();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushProgress);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushProgress);
+      flushProgress();
+    };
+  }, [flushProgress]);
 
   // Update streak safely on initial mount
   useEffect(() => {
@@ -131,6 +201,68 @@ export function useGitProgress() {
         xp: newXp,
         level: lvlInfo.level,
         achievements: updatedAchievements
+      };
+    });
+  }, []);
+
+  const completeQuizQuestion = useCallback((questionId: string, xpReward: number) => {
+    setProgress(prev => {
+      if (prev.completedQuizIds.includes(questionId)) return prev;
+
+      const newXp = prev.xp + xpReward;
+      const lvlInfo = calculateLevel(newXp);
+      const updatedAchievements = checkAchievements(
+        prev,
+        newXp,
+        prev.completedLessonIds,
+        prev.sandboxCommandsCount
+      );
+
+      return {
+        ...prev,
+        xp: newXp,
+        level: lvlInfo.level,
+        completedQuizIds: [...prev.completedQuizIds, questionId],
+        achievements: updatedAchievements
+      };
+    });
+  }, []);
+
+  const completePuzzle = useCallback((puzzleId: string, xpReward: number) => {
+    setProgress(prev => {
+      if (prev.completedPuzzleIds.includes(puzzleId)) return prev;
+
+      const newXp = prev.xp + xpReward;
+      const lvlInfo = calculateLevel(newXp);
+      const updatedAchievements = checkAchievements(
+        prev,
+        newXp,
+        prev.completedLessonIds,
+        prev.sandboxCommandsCount
+      );
+
+      return {
+        ...prev,
+        xp: newXp,
+        level: lvlInfo.level,
+        completedPuzzleIds: [...prev.completedPuzzleIds, puzzleId],
+        achievements: updatedAchievements
+      };
+    });
+  }, []);
+
+  const unlockAchievement = useCallback((achievementId: string) => {
+    setProgress(prev => {
+      const achievement = prev.achievements.find(item => item.id === achievementId);
+      if (!achievement || achievement.unlocked) return prev;
+
+      return {
+        ...prev,
+        achievements: prev.achievements.map(item =>
+          item.id === achievementId
+            ? { ...item, unlocked: true, unlockedAt: 'Только что' }
+            : item
+        )
       };
     });
   }, []);
@@ -226,6 +358,9 @@ export function useGitProgress() {
     progress,
     levelInfo,
     addXp,
+    completeQuizQuestion,
+    completePuzzle,
+    unlockAchievement,
     completeLesson,
     recordMistake,
     resolveMistake,
@@ -279,7 +414,11 @@ function checkAchievements(
       };
     }
 
-    if (ach.id === 'ach_git_guru' && xp >= 500 && completedLessons.length >= 10) {
+    if (
+      ach.id === 'ach_git_guru'
+      && xp > 500
+      && ALL_LESSONS.every(lesson => completedLessons.includes(lesson.id))
+    ) {
       return { ...ach, unlocked: true, unlockedAt: 'Только что' };
     }
 

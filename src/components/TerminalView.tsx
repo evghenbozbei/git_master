@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { GitState } from '../types';
 import { executeGitCommand, INITIAL_GIT_STATE } from '../utils/gitSimulator';
 import GitGraphVisualizer from './GitGraphVisualizer';
@@ -11,7 +11,9 @@ interface TerminalViewProps {
   initialCommand?: string;
 }
 
-export default function TerminalView({ onCommandRun, initialCommand }: TerminalViewProps) {
+// Memoized: App re-renders on every progress change (each command bumps the sandbox counter),
+// while this view's props (stable callback + string) stay the same.
+export default memo(function TerminalView({ onCommandRun, initialCommand }: TerminalViewProps) {
   const [gitState, setGitState] = useState<GitState>(INITIAL_GIT_STATE);
   const [inputValue, setInputValue] = useState(initialCommand || '');
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
@@ -58,9 +60,6 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
     if (!command.trim()) return;
 
     const { newState, output } = executeGitCommand(command, gitState);
-    if (output.text) {
-      newState.terminalOutput.push(output);
-    }
 
     if (output.type === 'error') {
       soundFX.playMistake();
@@ -100,6 +99,10 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
       }
     }
   };
+
+  const handleSelectCommit = useCallback((id: string) => {
+    setSelectedCommitId(prev => (prev === id ? null : id));
+  }, []);
 
   const handleResetSandbox = () => {
     soundFX.playTap();
@@ -145,7 +148,7 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
       <GitGraphVisualizer
         gitState={gitState}
         selectedCommitId={selectedCommitId}
-        onSelectCommit={id => setSelectedCommitId(id === selectedCommitId ? null : id)}
+        onSelectCommit={handleSelectCommit}
       />
 
       {/* Tabs for Terminal vs Working Tree Files */}
@@ -357,4 +360,4 @@ export default function TerminalView({ onCommandRun, initialCommand }: TerminalV
       </div>
     </div>
   );
-}
+});
